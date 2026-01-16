@@ -32,6 +32,10 @@ test-data/comparison_test_*/
 test-data/*_count.txt
 test-data/reconstructed*.bam*
 test-data/s3-test/
+test_bam_export/
+
+# Local testing configuration
+.testing.config
 
 # IDE
 .vscode/
