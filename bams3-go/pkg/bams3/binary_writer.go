@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"strconv"
+	"strings"
 )
 
 // Binary format constants
@@ -241,6 +243,30 @@ func encodeBase(b byte) byte {
 	default:
 		return 0
 	}
+}
+
+// ParseSize parses size string (e.g., "1M", "512K", "8G") to bytes
+func ParseSize(sizeStr string) (int64, error) {
+	sizeStr = strings.ToUpper(strings.TrimSpace(sizeStr))
+
+	var multiplier int64 = 1
+	if strings.HasSuffix(sizeStr, "K") {
+		multiplier = 1024
+		sizeStr = sizeStr[:len(sizeStr)-1]
+	} else if strings.HasSuffix(sizeStr, "M") {
+		multiplier = 1024 * 1024
+		sizeStr = sizeStr[:len(sizeStr)-1]
+	} else if strings.HasSuffix(sizeStr, "G") {
+		multiplier = 1024 * 1024 * 1024
+		sizeStr = sizeStr[:len(sizeStr)-1]
+	}
+
+	value, err := strconv.ParseInt(sizeStr, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid size: %s", sizeStr)
+	}
+
+	return value * multiplier, nil
 }
 
 // ParseChunkSize parses chunk size string (e.g., "1M", "512K") to bytes

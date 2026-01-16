@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -14,6 +13,7 @@ import (
 // Writer writes BAMS3 datasets
 type Writer struct {
 	path          string
+	storage       Storage // Storage backend (local or S3)
 	chunkSize     int
 	compression   string
 	format        string // "json" or "binary"
@@ -39,8 +39,15 @@ func NewWriter(path string, chunkSize int, compression string, format string) (*
 		version = "0.2.0"
 	}
 
+	// Create storage backend (auto-detects local vs S3)
+	storage, err := NewStorage(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create storage backend: %w", err)
+	}
+
 	w := &Writer{
 		path:        path,
+		storage:     storage,
 		chunkSize:   chunkSize,
 		compression: compression,
 		format:      format,
@@ -76,15 +83,15 @@ func NewWriter(path string, chunkSize int, compression string, format string) (*
 	}
 
 	// Create directory structure
-	if err := os.MkdirAll(path, 0755); err != nil {
+	if err := storage.MkdirAll(""); err != nil {
 		return nil, fmt.Errorf("failed to create dataset directory: %w", err)
 	}
 
-	if err := os.MkdirAll(filepath.Join(path, "_index"), 0755); err != nil {
+	if err := storage.MkdirAll("_index"); err != nil {
 		return nil, fmt.Errorf("failed to create index directory: %w", err)
 	}
 
-	if err := os.MkdirAll(filepath.Join(path, "data"), 0755); err != nil {
+	if err := storage.MkdirAll("data"); err != nil {
 		return nil, fmt.Errorf("failed to create data directory: %w", err)
 	}
 
@@ -99,6 +106,11 @@ func (w *Writer) SetHeader(header Header) {
 // SetSource sets the source information
 func (w *Writer) SetSource(source Source) {
 	w.metadata.Source = source
+}
+
+// GetChunks returns the accumulated chunks (for parallel processing)
+func (w *Writer) GetChunks() map[string][]ChunkRead {
+	return w.chunks
 }
 
 // AddRead adds a read to the appropriate chunk
@@ -241,10 +253,11 @@ func (w *Writer) writeChunk(chunkKey string, reads []ChunkRead) error {
 	// Determine chunk path
 	var chunkPath string
 	if reference == "unmapped" {
-		chunkPath = filepath.Join(w.path, "data", "unmapped.chunk")
+		chunkPath = filepath.Join("data", "unmapped.chunk")
 	} else {
-		refDir := filepath.Join(w.path, "data", reference)
-		if err := os.MkdirAll(refDir, 0755); err != nil {
+		// Create reference directory
+		refDir := filepath.Join("data", reference)
+		if err := w.storage.MkdirAll(refDir); err != nil {
 			return err
 		}
 		chunkPath = filepath.Join(refDir, fmt.Sprintf("%09d-%09d.chunk", start, end))
@@ -280,7 +293,7 @@ func (w *Writer) writeChunk(chunkKey string, reads []ChunkRead) error {
 		}
 	}
 
-	if err := os.WriteFile(chunkPath, data, 0644); err != nil {
+	if err := w.storage.WriteFile(chunkPath, data); err != nil {
 		return err
 	}
 
@@ -289,10 +302,7 @@ func (w *Writer) writeChunk(chunkKey string, reads []ChunkRead) error {
 	checksum := fmt.Sprintf("%x", hash)
 
 	// Get file size
-	info, err := os.Stat(chunkPath)
-	if err != nil {
-		return err
-	}
+	fileSize := int64(len(data))
 
 	// Record chunk info
 	chunkInfo := ChunkInfo{
@@ -301,7 +311,7 @@ func (w *Writer) writeChunk(chunkKey string, reads []ChunkRead) error {
 		Start:       start,
 		End:         end,
 		Reads:       len(reads),
-		SizeBytes:   info.Size(),
+		SizeBytes:   fileSize,
 		Compression: compressionType,
 		Checksum:    checksum,
 		Created:     time.Now(),
@@ -318,24 +328,22 @@ func (w *Writer) writeChunk(chunkKey string, reads []ChunkRead) error {
 
 // writeHeader writes the header file
 func (w *Writer) writeHeader() error {
-	path := filepath.Join(w.path, "_header.json")
 	data, err := json.MarshalIndent(w.header, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	return os.WriteFile(path, data, 0644)
+	return w.storage.WriteFile("_header.json", data)
 }
 
 // writeMetadata writes the metadata file
 func (w *Writer) writeMetadata() error {
-	path := filepath.Join(w.path, "_metadata.json")
 	data, err := json.MarshalIndent(w.metadata, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	return os.WriteFile(path, data, 0644)
+	return w.storage.WriteFile("_metadata.json", data)
 }
 
 // writeSpatialIndex writes the spatial index
@@ -373,11 +381,10 @@ func (w *Writer) writeSpatialIndex() error {
 	}
 
 	// Write index
-	path := filepath.Join(w.path, "_index", "spatial.json")
 	data, err := json.MarshalIndent(index, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	return os.WriteFile(path, data, 0644)
+	return w.storage.WriteFile(filepath.Join("_index", "spatial.json"), data)
 }

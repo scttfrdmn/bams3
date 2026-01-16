@@ -3,7 +3,6 @@ package bams3
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 )
@@ -11,27 +10,33 @@ import (
 // Reader reads BAMS3 datasets
 type Reader struct {
 	dataset Dataset
+	storage Storage // Storage backend (local or S3)
 }
 
 // OpenDataset opens a BAMS3 dataset
 func OpenDataset(path string) (*Reader, error) {
-	r := &Reader{}
+	// Create storage backend (auto-detects local vs S3)
+	storage, err := NewStorage(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create storage backend: %w", err)
+	}
+
+	r := &Reader{
+		storage: storage,
+	}
 
 	// Load metadata
-	metadataPath := filepath.Join(path, "_metadata.json")
-	if err := r.loadMetadata(metadataPath); err != nil {
+	if err := r.loadMetadata("_metadata.json"); err != nil {
 		return nil, fmt.Errorf("failed to load metadata: %w", err)
 	}
 
 	// Load header
-	headerPath := filepath.Join(path, "_header.json")
-	if err := r.loadHeader(headerPath); err != nil {
+	if err := r.loadHeader("_header.json"); err != nil {
 		return nil, fmt.Errorf("failed to load header: %w", err)
 	}
 
 	// Load spatial index
-	indexPath := filepath.Join(path, "_index", "spatial.json")
-	if err := r.loadIndex(indexPath); err != nil {
+	if err := r.loadIndex(filepath.Join("_index", "spatial.json")); err != nil {
 		return nil, fmt.Errorf("failed to load index: %w", err)
 	}
 
@@ -42,7 +47,7 @@ func OpenDataset(path string) (*Reader, error) {
 
 // loadMetadata loads the metadata file
 func (r *Reader) loadMetadata(path string) error {
-	data, err := os.ReadFile(path)
+	data, err := r.storage.ReadFile(path)
 	if err != nil {
 		return err
 	}
@@ -52,7 +57,7 @@ func (r *Reader) loadMetadata(path string) error {
 
 // loadHeader loads the header file
 func (r *Reader) loadHeader(path string) error {
-	data, err := os.ReadFile(path)
+	data, err := r.storage.ReadFile(path)
 	if err != nil {
 		return err
 	}
@@ -62,7 +67,7 @@ func (r *Reader) loadHeader(path string) error {
 
 // loadIndex loads the spatial index
 func (r *Reader) loadIndex(path string) error {
-	data, err := os.ReadFile(path)
+	data, err := r.storage.ReadFile(path)
 	if err != nil {
 		return err
 	}
@@ -115,8 +120,7 @@ func (r *Reader) QueryRegion(region Region) ([]Read, error) {
 
 	// Load and filter reads from each chunk
 	for _, chunkInfo := range chunks {
-		chunkPath := filepath.Join(r.dataset.Path, chunkInfo.Path)
-		chunkReads, err := r.loadChunk(chunkPath)
+		chunkReads, err := r.loadChunk(chunkInfo.Path)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load chunk %s: %w", chunkInfo.Path, err)
 		}
@@ -134,7 +138,7 @@ func (r *Reader) QueryRegion(region Region) ([]Read, error) {
 
 // loadChunk loads a chunk file and converts to Read objects
 func (r *Reader) loadChunk(path string) ([]Read, error) {
-	data, err := os.ReadFile(path)
+	data, err := r.storage.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +146,7 @@ func (r *Reader) loadChunk(path string) ([]Read, error) {
 	// Find chunk info to check compression
 	var chunkInfo *ChunkInfo
 	for i := range r.dataset.Metadata.Chunks {
-		if filepath.Join(r.dataset.Path, r.dataset.Metadata.Chunks[i].Path) == path {
+		if r.dataset.Metadata.Chunks[i].Path == path {
 			chunkInfo = &r.dataset.Metadata.Chunks[i]
 			break
 		}

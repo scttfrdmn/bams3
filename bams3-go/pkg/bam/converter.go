@@ -10,12 +10,17 @@ import (
 )
 
 // ConvertBAMToBAMS3 converts a BAM file to BAMS3 format
-func ConvertBAMToBAMS3(bamPath string, outputPath string, chunkSize int, compression string, format string) error {
+func ConvertBAMToBAMS3(bamPath string, outputPath string, chunkSize int, compression string, format string, workers int) error {
 	fmt.Printf("Converting %s to BAMS3 format...\n", bamPath)
 	fmt.Printf("Output directory: %s\n", outputPath)
 	fmt.Printf("Chunk size: %d bp\n", chunkSize)
 	fmt.Printf("Format: %s\n", format)
-	fmt.Printf("Compression: %s\n\n", compression)
+	fmt.Printf("Compression: %s\n", compression)
+	if workers > 1 {
+		fmt.Printf("Workers: %d (parallel)\n\n", workers)
+	} else {
+		fmt.Printf("Workers: 1 (sequential)\n\n")
+	}
 
 	// Open BAM file
 	f, err := os.Open(bamPath)
@@ -30,21 +35,26 @@ func ConvertBAMToBAMS3(bamPath string, outputPath string, chunkSize int, compres
 	}
 	defer bamFile.Close()
 
-	// Create BAMS3 writer
+	// Convert and prepare header
+	header := convertHeader(bamFile.Header())
+	source := bams3.Source{
+		File:   bamPath,
+		Format: "BAM",
+	}
+
+	// Use parallel writer if workers > 1
+	if workers > 1 {
+		return convertWithParallelWriter(bamFile, outputPath, chunkSize, compression, format, workers, header, source)
+	}
+
+	// Sequential conversion (original path)
 	writer, err := bams3.NewWriter(outputPath, chunkSize, compression, format)
 	if err != nil {
 		return fmt.Errorf("failed to create BAMS3 writer: %w", err)
 	}
 
-	// Convert and set header
-	header := convertHeader(bamFile.Header())
 	writer.SetHeader(header)
-
-	// Set source
-	writer.SetSource(bams3.Source{
-		File:   bamPath,
-		Format: "BAM",
-	})
+	writer.SetSource(source)
 
 	fmt.Println("Processing reads into chunks...")
 
@@ -83,6 +93,68 @@ func ConvertBAMToBAMS3(bamPath string, outputPath string, chunkSize int, compres
 
 	// Finalize (writes all chunks and metadata)
 	return writer.Finalize()
+}
+
+// convertWithParallelWriter converts BAM using parallel compression
+func convertWithParallelWriter(bamFile *bam.Reader, outputPath string, chunkSize int, compression string, format string, workers int, header bams3.Header, source bams3.Source) error {
+	// Create parallel writer
+	writer, err := bams3.NewParallelWriter(outputPath, chunkSize, compression, format, workers)
+	if err != nil {
+		return fmt.Errorf("failed to create parallel writer: %w", err)
+	}
+
+	writer.SetHeader(header)
+	writer.SetSource(source)
+
+	// Start worker pool
+	writer.Start()
+
+	fmt.Println("Processing reads into chunks (parallel)...")
+
+	// Process reads and accumulate into chunks
+	readCount := 0
+	chunkIndex := 0
+
+	for {
+		record, err := bamFile.Read()
+		if err != nil {
+			if err.Error() == "EOF" {
+				break
+			}
+			return fmt.Errorf("failed to read BAM record: %w", err)
+		}
+
+		readCount++
+		if readCount%100000 == 0 {
+			fmt.Printf("  Processed %d reads...\n", readCount)
+		}
+
+		// Convert BAM record to BAMS3 Read
+		read := convertRecord(record)
+
+		// Get reference name
+		refName := "*"
+		if record.Ref != nil {
+			refName = record.Ref.Name()
+		}
+
+		// Add to writer (accumulates into chunks)
+		if err := writer.AddRead(read, refName); err != nil {
+			return fmt.Errorf("failed to add read: %w", err)
+		}
+	}
+
+	fmt.Printf("\nTotal reads processed: %d\n", readCount)
+	fmt.Printf("Compressing chunks in parallel...\n\n")
+
+	// Submit all accumulated chunks for parallel compression
+	for chunkKey, reads := range writer.Writer.GetChunks() {
+		writer.SubmitChunk(chunkKey, reads, chunkIndex)
+		chunkIndex++
+	}
+
+	// Finalize (waits for workers, writes chunks and metadata)
+	return writer.FinalizeParallel()
 }
 
 // convertHeader converts sam.Header to bams3.Header
