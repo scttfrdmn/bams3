@@ -405,18 +405,16 @@ func (sc *StreamConverter) readAndSort(scanner *bufio.Scanner, refNameToID map[s
 		return fmt.Errorf("error reading input: %w", err)
 	}
 
-	// Final flush: write ALL remaining records and chunks
-	if len(sortBuffer) > 0 {
-		if err := sc.flushSortBuffer(&sortBuffer, &sortBufferBytes, true); err != nil {
-			return err
-		}
+	// Final merge and flush
+	if err := sc.finalMergeAndFlush(&sortBuffer); err != nil {
+		return err
 	}
 
 	return nil
 }
 
 // flushSortBuffer sorts and writes records from the sort buffer
-// If isFinal is true, flushes all accumulated chunks regardless of frontier
+// If buffer is full but chunks can't be flushed (due to frontier), spills to disk
 func (sc *StreamConverter) flushSortBuffer(buffer *[]Read, bufferBytes *int64, isFinal bool) error {
 	if len(*buffer) == 0 {
 		return nil
@@ -452,7 +450,62 @@ func (sc *StreamConverter) flushSortBuffer(buffer *[]Read, bufferBytes *int64, i
 		}
 	}
 
-	// Add reads to writer (accumulates into chunks)
+	initialBufferSize := len(*buffer)
+
+	// First, check if we can do incremental flush by examining existing chunks
+	safetyMargin := sc.config.ChunkSize * 2
+	existingChunks := sc.writer.Writer.GetChunks()
+	canFlushExisting := false
+
+	for chunkKey := range existingChunks {
+		if sc.shouldFlushChunk(chunkKey, safetyMargin) {
+			canFlushExisting = true
+			break
+		}
+	}
+
+	// If we can't flush existing chunks and buffer is full, we need to spill
+	// (unless this is preventing us from making progress)
+	if !canFlushExisting && len(existingChunks) > 0 && sc.config.SpillToDisk && sc.spillDir != "" {
+		// Spill current buffer to disk without adding to writer
+		fmt.Fprintf(os.Stderr, "\nSpilling %d reads to disk (spill #%d)...\n",
+			initialBufferSize, len(sc.spillFiles)+1)
+
+		spillNum := len(sc.spillFiles)
+		spillWriter, err := NewSpillWriter(sc.spillDir, spillNum)
+		if err != nil {
+			return fmt.Errorf("failed to create spill writer: %w", err)
+		}
+
+		for i := range *buffer {
+			if err := spillWriter.WriteRead(&(*buffer)[i]); err != nil {
+				spillWriter.Close()
+				return fmt.Errorf("failed to write read to spill: %w", err)
+			}
+		}
+
+		spillFile, err := spillWriter.Close()
+		if err != nil {
+			return fmt.Errorf("failed to close spill writer: %w", err)
+		}
+
+		sc.spillFiles = append(sc.spillFiles, spillFile)
+
+		sc.statsMutex.Lock()
+		sc.stats.SpillsToDisK++
+		sc.statsMutex.Unlock()
+
+		fmt.Fprintf(os.Stderr, "Spilled %d reads (%.1f MB) to %s\n",
+			spillFile.NumReads, float64(spillFile.SizeBytes)/float64(MB), spillFile.Path)
+
+		// Clear buffer - reads are now on disk
+		*buffer = (*buffer)[:0]
+		*bufferBytes = 0
+
+		return nil
+	}
+
+	// Not spilling - add reads to writer for incremental flush
 	for i := range *buffer {
 		refName := sc.getRefName((*buffer)[i].ReferenceID)
 		if err := sc.writer.AddRead((*buffer)[i], refName); err != nil {
@@ -460,37 +513,110 @@ func (sc *StreamConverter) flushSortBuffer(buffer *[]Read, bufferBytes *int64, i
 		}
 	}
 
-	// Determine which chunks can be safely flushed
-	safetyMargin := sc.config.ChunkSize * 2 // Keep 2 chunks worth of margin
-
+	// Try to flush chunks that are behind the frontier
 	chunks := sc.writer.Writer.GetChunks()
 	chunkIndex := 0
+	flushedAny := false
 
 	for chunkKey, reads := range chunks {
-		var canFlush bool
-
-		if isFinal {
-			// Final flush: write everything
-			canFlush = true
-		} else {
-			// Incremental flush: only write chunks safely behind the frontier
-			canFlush = sc.shouldFlushChunk(chunkKey, safetyMargin)
-		}
-
-		if canFlush {
+		if sc.shouldFlushChunk(chunkKey, safetyMargin) {
 			sc.writer.SubmitChunk(chunkKey, reads, chunkIndex)
 			chunkIndex++
+			flushedAny = true
 
 			sc.statsMutex.Lock()
 			sc.stats.ChunksFinalized++
 			sc.statsMutex.Unlock()
 		}
-		// If not flushing, chunk remains in writer's accumulator
+	}
+
+	// Clear buffer regardless (reads are now in writer's chunks)
+	*buffer = (*buffer)[:0]
+	*bufferBytes = 0
+
+	if !flushedAny && len(existingChunks) > 10 {
+		// Warning: accumulating many chunks without flushing
+		fmt.Fprintf(os.Stderr, "\nWarning: %d chunks accumulated without flushing\n", len(chunks))
+	}
+
+	return nil
+}
+
+// finalMergeAndFlush performs final merge of spill files and in-memory buffer
+func (sc *StreamConverter) finalMergeAndFlush(buffer *[]Read) error {
+	// If no spill files, just do a normal final flush
+	if len(sc.spillFiles) == 0 {
+		bufferBytes := int64(0)
+		for i := range *buffer {
+			bufferBytes += int64(len((*buffer)[i].Sequence) + len((*buffer)[i].Quality) + 100)
+		}
+		return sc.flushSortBuffer(buffer, &bufferBytes, true)
+	}
+
+	// We have spill files - need to do k-way merge
+	fmt.Fprintf(os.Stderr, "\nPerforming k-way merge of %d spill files + in-memory buffer...\n",
+		len(sc.spillFiles))
+
+	// Open all spill readers
+	spillReaders := make([]*SpillReader, 0, len(sc.spillFiles))
+	for i, spillFile := range sc.spillFiles {
+		reader, err := NewSpillReader(spillFile.Path)
+		if err != nil {
+			// Close any readers we've already opened
+			for _, r := range spillReaders {
+				r.Close()
+			}
+			return fmt.Errorf("failed to open spill file %d: %w", i, err)
+		}
+		spillReaders = append(spillReaders, reader)
+	}
+
+	// Ensure readers are closed when done
+	defer func() {
+		for _, reader := range spillReaders {
+			reader.Close()
+		}
+	}()
+
+	// Sort in-memory buffer first
+	sort.Slice(*buffer, func(i, j int) bool {
+		if (*buffer)[i].ReferenceID != (*buffer)[j].ReferenceID {
+			return (*buffer)[i].ReferenceID < (*buffer)[j].ReferenceID
+		}
+		return (*buffer)[i].Position < (*buffer)[j].Position
+	})
+
+	// Perform k-way merge
+	mergedReads, err := kWayMerge(spillReaders, *buffer)
+	if err != nil {
+		return fmt.Errorf("k-way merge failed: %w", err)
+	}
+
+	fmt.Fprintf(os.Stderr, "Merged %d total reads, writing to chunks...\n", len(mergedReads))
+
+	// Write all merged reads to chunks
+	for i := range mergedReads {
+		refName := sc.getRefName(mergedReads[i].ReferenceID)
+		if err := sc.writer.AddRead(mergedReads[i], refName); err != nil {
+			return fmt.Errorf("failed to add merged read: %w", err)
+		}
+	}
+
+	// Flush all accumulated chunks
+	chunks := sc.writer.Writer.GetChunks()
+	chunkIndex := 0
+
+	for chunkKey, reads := range chunks {
+		sc.writer.SubmitChunk(chunkKey, reads, chunkIndex)
+		chunkIndex++
+
+		sc.statsMutex.Lock()
+		sc.stats.ChunksFinalized++
+		sc.statsMutex.Unlock()
 	}
 
 	// Clear buffer
 	*buffer = (*buffer)[:0]
-	*bufferBytes = 0
 
 	return nil
 }
