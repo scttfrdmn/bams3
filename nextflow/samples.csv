@@ -1,0 +1,4 @@
+sample_id,reads_r1,reads_r2
+NA12878,s3://1000genomes/data/NA12878/NA12878_R1.fastq.gz,s3://1000genomes/data/NA12878/NA12878_R2.fastq.gz
+NA12891,s3://1000genomes/data/NA12891/NA12891_R1.fastq.gz,s3://1000genomes/data/NA12891/NA12891_R2.fastq.gz
+NA12892,s3://1000genomes/data/NA12892/NA12892_R1.fastq.gz,s3://1000genomes/data/NA12892/NA12892_R2.fastq.gz

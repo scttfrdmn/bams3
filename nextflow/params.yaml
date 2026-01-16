@@ -1,0 +1,92 @@
+# BAMS3 Pipeline Parameters
+#
+# Example parameter file for running the pipeline
+# Usage: nextflow run main.nf -params-file params.yaml
+
+# ============================================================================
+# Input Files
+# ============================================================================
+
+# Sample sheet (CSV format with columns: sample_id,reads_r1,reads_r2)
+samples: "samples.csv"
+
+# Reference genome (FASTA format)
+reference: "/data/references/GRCh38.fa"
+
+# Regions for variant calling (BED format, optional)
+# If not provided, whole-genome variant calling will be performed
+regions: "targets.bed"
+
+# ============================================================================
+# Output Directories
+# ============================================================================
+
+# Main output directory (can be S3 or local path)
+output_dir: "s3://my-genomics-bucket/results/cohort_001"
+
+# Specific output directories (derived from output_dir if not set)
+bams3_dir: "s3://my-genomics-bucket/results/cohort_001/bams3"
+vcf_dir: "s3://my-genomics-bucket/results/cohort_001/vcf"
+qc_dir: "s3://my-genomics-bucket/results/cohort_001/qc"
+
+# ============================================================================
+# Analysis Parameters
+# ============================================================================
+
+# Variant caller: "gatk" or "bcftools"
+variant_caller: "gatk"
+
+# ============================================================================
+# Resource Allocation
+# ============================================================================
+
+# Alignment resources
+align_cpus: 16
+align_memory: "32 GB"
+sort_buffer: "28G"  # Leave 4GB for system overhead
+
+# Variant calling resources
+vcall_cpus: 4
+vcall_memory: "16 GB"
+
+# Maximum resources (limits for all processes)
+max_cpus: 32
+max_memory: "128 GB"
+max_time: "48 h"
+
+# ============================================================================
+# Examples for Different Scenarios
+# ============================================================================
+
+# Example 1: Local execution with small dataset
+# ---
+# samples: "data/samples_small.csv"
+# reference: "data/reference.fa"
+# regions: "data/exons.bed"
+# output_dir: "results"
+# align_cpus: 8
+# align_memory: "16 GB"
+# sort_buffer: "14G"
+
+# Example 2: AWS Batch execution with large cohort
+# ---
+# samples: "s3://input-data/cohort_wgs/samples.csv"
+# reference: "s3://references/GRCh38_full_analysis_set.fa"
+# regions: null  # Whole genome
+# output_dir: "s3://results/wgs_cohort_2024"
+# align_cpus: 32
+# align_memory: "64 GB"
+# sort_buffer: "58G"
+# vcall_cpus: 8
+# vcall_memory: "32 GB"
+
+# Example 3: Targeted sequencing (exome, gene panels)
+# ---
+# samples: "samples_exome.csv"
+# reference: "/refs/GRCh38.fa"
+# regions: "targets/exome_v7_targets.bed"
+# output_dir: "s3://exome-results/batch_042"
+# align_cpus: 16
+# align_memory: "32 GB"
+# vcall_cpus: 4
+# vcall_memory: "16 GB"

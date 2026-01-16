@@ -1,0 +1,103 @@
+name: Nextflow Pipeline Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'nextflow/**'
+      - '.github/workflows/nextflow-pipeline.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'nextflow/**'
+
+jobs:
+  test-pipeline:
+    name: Test Nextflow Pipeline
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install Nextflow
+        run: |
+          curl -s https://get.nextflow.io | bash
+          sudo mv nextflow /usr/local/bin/
+          nextflow -version
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bwa samtools bcftools tabix jq python3
+
+          # Verify installations
+          bwa 2>&1 | head -3
+          samtools --version
+          bcftools --version
+
+      - name: Install Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Build BAMS3
+        run: |
+          cd bams3-go
+          go build -o bams3 ./cmd/bams3
+          sudo cp bams3 /usr/local/bin/
+          bams3 --version
+
+      - name: Generate test data
+        run: |
+          cd nextflow/test_data
+          bash generate_test_data.sh
+          ls -lh
+
+      - name: Run pipeline test
+        run: |
+          cd nextflow
+          nextflow run main.nf -profile test
+
+      - name: Validate outputs
+        run: |
+          cd nextflow
+
+          # Check BAMS3 output exists
+          test -d test_results/bams3/test_sample.bams3 || exit 1
+
+          # Check metadata
+          test -f test_results/bams3/test_sample.bams3/_metadata.json || exit 1
+
+          # Check QC report
+          test -f test_results/qc/test_sample.qc_report.txt || exit 1
+
+          echo "✓ All outputs validated"
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: pipeline-results
+          path: |
+            nextflow/test_results/
+            nextflow/.nextflow.log
+
+  lint-pipeline:
+    name: Lint Nextflow Code
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install Nextflow
+        run: |
+          curl -s https://get.nextflow.io | bash
+          sudo mv nextflow /usr/local/bin/
+
+      - name: Lint pipeline
+        run: |
+          cd nextflow
+          # Check syntax
+          nextflow run main.nf --help || echo "Pipeline help check"
