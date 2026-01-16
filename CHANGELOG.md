@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-01-15
+
+### Added
+- **Binary chunk format** - Compact binary encoding replacing JSON POC format
+  - 2-3x smaller than JSON even with compression
+  - Matches or beats BAM file sizes when compressed
+  - Faster parsing (no JSON overhead)
+  - Preserves all SAM fields including tags
+  - Backward compatible reader supports both binary (v0.2) and JSON (v0.1) formats
+- **Power-of-2 chunk size selection** - Optimized for S3 cost/latency tradeoff
+  - Supported sizes: 256K, 512K, 1M (default), 2M, 4M, 8M
+  - Human-readable chunk size parsing (e.g., "512K", "2M")
+  - Validation ensures power-of-2 values only
+- **Compression enabled by default** - zstd compression is now the default
+  - 6x compression ratio on binary format
+  - 10ms overhead per chunk
+  - Significant storage and transfer cost savings
+
+### Changed
+- Default format changed from JSON to binary
+- Default compression changed from none to zstd
+- Default chunk size changed from 1,000,000 bp to 1M (1,048,576 bp)
+- CLI flags updated:
+  - `--chunk-size` now accepts power-of-2 sizes (e.g., "512K", "1M")
+  - `--format` flag added: binary (default) or json (legacy)
+  - `--compression` default changed to "zstd"
+
+### Performance
+- **Binary format size comparison** (test file: 291 bytes BAM, 5 reads)
+  - Binary chunks: 94 bytes and 80 bytes (2.1x smaller than JSON)
+  - JSON chunks: 197 bytes and 193 bytes
+  - 52% smaller with binary format vs JSON (both with zstd compression)
+- **Real data validation** (GIAB chr22: 11.9M reads, 591 MB BAM)
+  - Compressed BAMS3: 577 MB (0.96x vs BAM - smaller than original!)
+  - Query speedup: 31x faster (3.9s vs 120s)
+  - Statistics: 20,000x faster (0.006s vs 120s)
+  - Data transfer reduction: 99.7% cost savings
+
+### Technical
+- Magic number: 0x42414D33 ("BAM3") in little-endian format
+- 16-byte chunk header with version and flags
+- 12-byte record header with variable-length fields
+- 4-bit base encoding (2 bases per byte)
+- Packed CIGAR operations (4 bytes per operation)
+- SAM tags properly preserved with type information
+
+### Fixed
+- Tags preservation in round-trip conversion (POC limitation resolved)
+- CIGAR operations now stored as structured data for binary format
+- Proper little-endian magic number detection
+- Decompression handled correctly for both binary and JSON formats
+
+### Documentation
+- Added `BAMS3_BINARY_FORMAT_v0.2.md` specification
+- Updated CLI help with power-of-2 chunk size options
+- Added cost/latency tradeoff analysis for different chunk sizes
+
 ## [0.1.0] - 2026-01-15
 
 ### Added
@@ -57,5 +114,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SAM tags not fully preserved in POC format
 - Mate pair information not stored in POC format
 
-[Unreleased]: https://github.com/scttfrdmn/aws-direct-s3/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/scttfrdmn/aws-direct-s3/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/scttfrdmn/aws-direct-s3/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/scttfrdmn/aws-direct-s3/releases/tag/v0.1.0

@@ -13,27 +13,41 @@ import (
 
 // Writer writes BAMS3 datasets
 type Writer struct {
-	path        string
-	chunkSize   int
-	compression string
-	metadata    Metadata
-	header      Header
-	chunks      map[string][]ChunkRead // key: "ref:start:end"
-	chunkInfos  []ChunkInfo
-	statistics  Statistics
-	compressor  *Compressor
+	path          string
+	chunkSize     int
+	compression   string
+	format        string // "json" or "binary"
+	metadata      Metadata
+	header        Header
+	chunks        map[string][]ChunkRead // key: "ref:start:end"
+	chunkInfos    []ChunkInfo
+	statistics    Statistics
+	compressor    *Compressor
+	binaryWriter  *BinaryChunkWriter
 }
 
 // NewWriter creates a new BAMS3 writer
-func NewWriter(path string, chunkSize int, compression string) (*Writer, error) {
+func NewWriter(path string, chunkSize int, compression string, format string) (*Writer, error) {
+	// Default format to binary for v0.2
+	if format == "" {
+		format = "binary"
+	}
+
+	// Determine version based on format
+	version := "0.1.0"
+	if format == "binary" {
+		version = "0.2.0"
+	}
+
 	w := &Writer{
 		path:        path,
 		chunkSize:   chunkSize,
 		compression: compression,
+		format:      format,
 		chunks:      make(map[string][]ChunkRead),
 		metadata: Metadata{
 			Format:     "bams3",
-			Version:    "0.1.0",
+			Version:    version,
 			Created:    time.Now(),
 			CreatedBy:  "bams3-go",
 			ChunkSize:  chunkSize,
@@ -50,6 +64,15 @@ func NewWriter(path string, chunkSize int, compression string) (*Writer, error) 
 			return nil, fmt.Errorf("failed to create compressor: %w", err)
 		}
 		w.compressor = compressor
+	}
+
+	// Initialize binary writer if using binary format
+	if format == "binary" {
+		binaryWriter, err := NewBinaryChunkWriter(compression)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create binary writer: %w", err)
+		}
+		w.binaryWriter = binaryWriter
 	}
 
 	// Create directory structure
@@ -105,16 +128,24 @@ func (w *Writer) AddRead(read Read, refName string) error {
 
 	// Convert Read to ChunkRead
 	chunkRead := ChunkRead{
-		Name:  read.Name,
-		Flag:  read.Flag,
-		Ref:   read.ReferenceID,
-		Pos:   read.Position,
-		MapQ:  read.MappingQuality,
-		CIGAR: read.CIGAR,
-		Seq:   read.Sequence,
-		Qual:  read.Quality,
-		Tags:  read.Tags,
+		Name:            read.Name,
+		Flag:            read.Flag,
+		ReferenceID:     read.ReferenceID,
+		Position:        read.Position,
+		MappingQuality:  read.MappingQuality,
+		CIGAR:           read.CIGAR,
+		Sequence:        read.Sequence,
+		Quality:         read.Quality,
+		Tags:            read.Tags,
+		CIGAROps:        read.CIGAROps, // For binary format
 	}
+
+	// Legacy fields for JSON format compatibility
+	chunkRead.Ref = read.ReferenceID
+	chunkRead.Pos = read.Position
+	chunkRead.MapQ = read.MappingQuality
+	chunkRead.Seq = read.Sequence
+	chunkRead.Qual = read.Quality
 
 	// Add to chunk
 	w.chunks[chunkKey] = append(w.chunks[chunkKey], chunkRead)
@@ -219,20 +250,34 @@ func (w *Writer) writeChunk(chunkKey string, reads []ChunkRead) error {
 		chunkPath = filepath.Join(refDir, fmt.Sprintf("%09d-%09d.chunk", start, end))
 	}
 
-	// Write chunk data
-	data, err := json.Marshal(reads)
-	if err != nil {
-		return err
-	}
-
-	// Compress if enabled
+	// Write chunk data - use binary or JSON format
+	var data []byte
 	compressionType := w.compression
-	if w.compressor != nil && compressionType == "zstd" {
-		compressed, err := w.compressor.Compress(data)
+
+	if w.format == "binary" && w.binaryWriter != nil {
+		// Use binary format
+		binaryData, err := w.binaryWriter.WriteChunk(reads)
 		if err != nil {
-			return fmt.Errorf("failed to compress chunk: %w", err)
+			return fmt.Errorf("failed to write binary chunk: %w", err)
 		}
-		data = compressed
+		data = binaryData
+	} else {
+		// Use JSON format (v0.1)
+		jsonData, err := json.Marshal(reads)
+		if err != nil {
+			return err
+		}
+
+		// Compress if enabled (for JSON only, binary writer handles its own compression)
+		if w.compressor != nil && compressionType == "zstd" {
+			compressed, err := w.compressor.Compress(jsonData)
+			if err != nil {
+				return fmt.Errorf("failed to compress chunk: %w", err)
+			}
+			data = compressed
+		} else {
+			data = jsonData
+		}
 	}
 
 	if err := os.WriteFile(chunkPath, data, 0644); err != nil {

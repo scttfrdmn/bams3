@@ -148,7 +148,7 @@ func (r *Reader) loadChunk(path string) ([]Read, error) {
 		}
 	}
 
-	// Decompress if needed
+	// Decompress if needed (for both binary and JSON formats)
 	if chunkInfo != nil && chunkInfo.Compression == "zstd" {
 		decompressed, err := Decompress(data)
 		if err != nil {
@@ -157,9 +157,26 @@ func (r *Reader) loadChunk(path string) ([]Read, error) {
 		data = decompressed
 	}
 
+	// Auto-detect format by checking for binary magic number (after decompression)
+	// Magic number 0x42414D33 is stored in little-endian as: 0x33, 0x4D, 0x41, 0x42
+	isBinary := len(data) >= 4 &&
+		data[0] == 0x33 && data[1] == 0x4D && data[2] == 0x41 && data[3] == 0x42
+
 	var chunkReads []ChunkRead
-	if err := json.Unmarshal(data, &chunkReads); err != nil {
-		return nil, err
+
+	if isBinary {
+		// Use binary reader
+		binaryReader := &BinaryChunkReader{}
+		var err error
+		chunkReads, err = binaryReader.ReadChunk(data)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read binary chunk: %w", err)
+		}
+	} else {
+		// Use JSON reader
+		if err := json.Unmarshal(data, &chunkReads); err != nil {
+			return nil, fmt.Errorf("failed to parse JSON chunk: %w", err)
+		}
 	}
 
 	// Convert ChunkRead to Read
@@ -168,13 +185,31 @@ func (r *Reader) loadChunk(path string) ([]Read, error) {
 		reads[i] = Read{
 			Name:           cr.Name,
 			Flag:           cr.Flag,
-			ReferenceID:    cr.Ref,
-			Position:       cr.Pos,
-			MappingQuality: cr.MapQ,
+			ReferenceID:    cr.ReferenceID,
+			Position:       cr.Position,
+			MappingQuality: cr.MappingQuality,
 			CIGAR:          cr.CIGAR,
-			Sequence:       cr.Seq,
-			Quality:        cr.Qual,
+			CIGAROps:       cr.CIGAROps,
+			Sequence:       cr.Sequence,
+			Quality:        cr.Quality,
 			Tags:           cr.Tags,
+		}
+
+		// Fall back to legacy fields if new fields are empty
+		if reads[i].ReferenceID == 0 && cr.Ref != 0 {
+			reads[i].ReferenceID = cr.Ref
+		}
+		if reads[i].Position == 0 && cr.Pos != 0 {
+			reads[i].Position = cr.Pos
+		}
+		if reads[i].MappingQuality == 0 && cr.MapQ != 0 {
+			reads[i].MappingQuality = cr.MapQ
+		}
+		if reads[i].Sequence == "" && cr.Seq != "" {
+			reads[i].Sequence = cr.Seq
+		}
+		if reads[i].Quality == "" && cr.Qual != "" {
+			reads[i].Quality = cr.Qual
 		}
 	}
 

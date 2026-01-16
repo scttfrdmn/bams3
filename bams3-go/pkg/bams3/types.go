@@ -81,17 +81,24 @@ type ReferenceIndex struct {
 // Read represents an alignment read
 type Read struct {
 	Name            string
-	Flag            uint16
+	Flag            int
 	ReferenceID     int
 	Position        int
 	MappingQuality  uint8
 	CIGAR           string
+	CIGAROps        []CIGAROperation // For binary format
 	MateReferenceID int
 	MatePosition    int
 	TemplateLength  int
 	Sequence        string
 	Quality         string
 	Tags            map[string]interface{}
+}
+
+// CIGAROperation represents a single CIGAR operation
+type CIGAROperation struct {
+	Type   byte // MIDNSHP=X
+	Length int
 }
 
 // ChunkData represents the contents of a chunk
@@ -102,17 +109,26 @@ type ChunkData struct {
 	Reads     []ChunkRead `json:"reads"`
 }
 
-// ChunkRead is the JSON representation of a read in a chunk
+// ChunkRead is the representation of a read in a chunk (supports both JSON and binary)
 type ChunkRead struct {
-	Name   string                 `json:"name"`
-	Flag   uint16                 `json:"flag"`
-	Ref    int                    `json:"ref"`
-	Pos    int                    `json:"pos"`
-	MapQ   uint8                  `json:"mapq"`
-	CIGAR  string                 `json:"cigar"`
-	Seq    string                 `json:"seq"`
-	Qual   string                 `json:"qual"`
-	Tags   map[string]interface{} `json:"tags,omitempty"`
+	// Common fields
+	Name           string                 `json:"name"`
+	Flag           int                    `json:"flag"`
+	ReferenceID    int                    `json:"reference_id,omitempty"`    // Binary format
+	Position       int                    `json:"position,omitempty"`        // Binary format
+	MappingQuality uint8                  `json:"mapping_quality,omitempty"` // Binary format
+	CIGAR          string                 `json:"cigar"`
+	CIGAROps       []CIGAROperation       `json:"cigar_ops,omitempty"` // Binary format
+	Sequence       string                 `json:"sequence,omitempty"`  // Binary format
+	Quality        string                 `json:"quality,omitempty"`   // Binary format
+	Tags           map[string]interface{} `json:"tags,omitempty"`
+
+	// Legacy JSON fields (v0.1)
+	Ref  int    `json:"ref,omitempty"`
+	Pos  int    `json:"pos,omitempty"`
+	MapQ uint8  `json:"mapq,omitempty"`
+	Seq  string `json:"seq,omitempty"`
+	Qual string `json:"qual,omitempty"`
 }
 
 // Region represents a genomic region query

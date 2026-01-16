@@ -10,10 +10,12 @@ import (
 )
 
 // ConvertBAMToBAMS3 converts a BAM file to BAMS3 format
-func ConvertBAMToBAMS3(bamPath string, outputPath string, chunkSize int, compression string) error {
+func ConvertBAMToBAMS3(bamPath string, outputPath string, chunkSize int, compression string, format string) error {
 	fmt.Printf("Converting %s to BAMS3 format...\n", bamPath)
 	fmt.Printf("Output directory: %s\n", outputPath)
-	fmt.Printf("Chunk size: %d bp\n\n", chunkSize)
+	fmt.Printf("Chunk size: %d bp\n", chunkSize)
+	fmt.Printf("Format: %s\n", format)
+	fmt.Printf("Compression: %s\n\n", compression)
 
 	// Open BAM file
 	f, err := os.Open(bamPath)
@@ -29,7 +31,7 @@ func ConvertBAMToBAMS3(bamPath string, outputPath string, chunkSize int, compres
 	defer bamFile.Close()
 
 	// Create BAMS3 writer
-	writer, err := bams3.NewWriter(outputPath, chunkSize, compression)
+	writer, err := bams3.NewWriter(outputPath, chunkSize, compression, format)
 	if err != nil {
 		return fmt.Errorf("failed to create BAMS3 writer: %w", err)
 	}
@@ -144,12 +146,23 @@ func convertHeader(samHeader *sam.Header) bams3.Header {
 func convertRecord(record *sam.Record) bams3.Read {
 	read := bams3.Read{
 		Name:           record.Name,
-		Flag:           uint16(record.Flags),
+		Flag:           int(record.Flags),
 		Position:       record.Pos,
 		MappingQuality: uint8(record.MapQ),
 		CIGAR:          record.Cigar.String(),
 		Sequence:       string(record.Seq.Expand()),
 		Tags:           make(map[string]interface{}),
+	}
+
+	// Convert CIGAR to operations (for binary format)
+	if record.Cigar != nil {
+		read.CIGAROps = make([]bams3.CIGAROperation, len(record.Cigar))
+		for i, op := range record.Cigar {
+			read.CIGAROps[i] = bams3.CIGAROperation{
+				Type:   byte(op.Type()),
+				Length: op.Len(),
+			}
+		}
 	}
 
 	// Set reference ID
@@ -183,7 +196,9 @@ func convertRecord(record *sam.Record) bams3.Read {
 	for _, tag := range record.AuxFields {
 		tagStr := tag.String()
 		// Simple tag parsing - can be improved
-		read.Tags[tagStr[:2]] = tagStr[5:]
+		if len(tagStr) >= 2 {
+			read.Tags[tagStr[:2]] = tagStr[5:]
+		}
 	}
 
 	return read
