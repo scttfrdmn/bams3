@@ -1,0 +1,299 @@
+{
+  "format": "bams3",
+  "version": "0.1.0-poc",
+  "created": "2026-01-15T15:58:49.686405",
+  "created_by": "bams3_converter.py POC",
+  "source": {
+    "file": "test_sample.bam",
+    "format": "BAM"
+  },
+  "statistics": {
+    "total_reads": 1000,
+    "mapped_reads": 885,
+    "unmapped_reads": 115,
+    "duplicate_reads": 0,
+    "total_bases": 75000,
+    "mean_coverage": 0.003125
+  },
+  "chunks": [
+    {
+      "path": "data/chr1/000000000-001000000.chunk",
+      "reference": "chr1",
+      "start": 0,
+      "end": 1000000,
+      "reads": 52,
+      "size_bytes": 13617,
+      "compression": "none",
+      "checksum": "ba7d4556821ccd1fc20d2075a073982e832ce79753f47841c93bfd1a7299d5a0",
+      "created": "2026-01-15T15:58:49.613337"
+    },
+    {
+      "path": "data/chr1/001000000-002000000.chunk",
+      "reference": "chr1",
+      "start": 1000000,
+      "end": 2000000,
+      "reads": 48,
+      "size_bytes": 12624,
+      "compression": "none",
+      "checksum": "d7ea47d3d28689623c1702b827d5eead878d972be91ca6bcbabd6f873f457f0f",
+      "created": "2026-01-15T15:58:49.616502"
+    },
+    {
+      "path": "data/chr1/002000000-003000000.chunk",
+      "reference": "chr1",
+      "start": 2000000,
+      "end": 3000000,
+      "reads": 47,
+      "size_bytes": 12361,
+      "compression": "none",
+      "checksum": "0a9169d2dce22c833c91265f8a0296d6e03fb7a542b9d3edb6141992c4ff9b85",
+      "created": "2026-01-15T15:58:49.618579"
+    },
+    {
+      "path": "data/chr1/003000000-004000000.chunk",
+      "reference": "chr1",
+      "start": 3000000,
+      "end": 4000000,
+      "reads": 34,
+      "size_bytes": 8942,
+      "compression": "none",
+      "checksum": "3b80bf0e4c8e58565836c7554ee50fa8d13ebdb0e61d95a841f19ed70fc3dadd",
+      "created": "2026-01-15T15:58:49.620363"
+    },
+    {
+      "path": "data/chr1/004000000-005000000.chunk",
+      "reference": "chr1",
+      "start": 4000000,
+      "end": 5000000,
+      "reads": 45,
+      "size_bytes": 11835,
+      "compression": "none",
+      "checksum": "e6227581992d610b017620a56af3d9b2f54440bc853fd2824f71fd004b376b8a",
+      "created": "2026-01-15T15:58:49.622365"
+    },
+    {
+      "path": "data/chr1/005000000-006000000.chunk",
+      "reference": "chr1",
+      "start": 5000000,
+      "end": 6000000,
+      "reads": 36,
+      "size_bytes": 9468,
+      "compression": "none",
+      "checksum": "e62a4172d459551725e3253cc785d52f7fbefa109081343917c431f7ad30bd3d",
+      "created": "2026-01-15T15:58:49.623952"
+    },
+    {
+      "path": "data/chr1/006000000-007000000.chunk",
+      "reference": "chr1",
+      "start": 6000000,
+      "end": 7000000,
+      "reads": 45,
+      "size_bytes": 11835,
+      "compression": "none",
+      "checksum": "d6f9f54226df8fe83fdc461466b625368a83024535a4b07c84b912989171645e",
+      "created": "2026-01-15T15:58:49.625925"
+    },
+    {
+      "path": "data/chr1/007000000-008000000.chunk",
+      "reference": "chr1",
+      "start": 7000000,
+      "end": 8000000,
+      "reads": 42,
+      "size_bytes": 11046,
+      "compression": "none",
+      "checksum": "9a5d37da5cc4b2b86631103f6490618f4b713d34ee71765aabf0ccfc84cf6f27",
+      "created": "2026-01-15T15:58:49.627513"
+    },
+    {
+      "path": "data/chr1/008000000-009000000.chunk",
+      "reference": "chr1",
+      "start": 8000000,
+      "end": 9000000,
+      "reads": 47,
+      "size_bytes": 12361,
+      "compression": "none",
+      "checksum": "87d86435ad2508c96d02de5ec26d04ea0c11228a12ffdd564d8ff7382a07f63f",
+      "created": "2026-01-15T15:58:49.630577"
+    },
+    {
+      "path": "data/chr1/009000000-010000000.chunk",
+      "reference": "chr1",
+      "start": 9000000,
+      "end": 10000000,
+      "reads": 38,
+      "size_bytes": 9994,
+      "compression": "none",
+      "checksum": "bcd07abf8c89d89647960207c79755328a311d3ab5d24833b7fd8597cb155ae5",
+      "created": "2026-01-15T15:58:49.631753"
+    },
+    {
+      "path": "data/chr2/000000000-001000000.chunk",
+      "reference": "chr2",
+      "start": 0,
+      "end": 1000000,
+      "reads": 26,
+      "size_bytes": 6807,
+      "compression": "none",
+      "checksum": "3cb5339e0a7a2a3729b62ca40ee3c9fd5b38da9287c9f5efd028c8653df8d5d5",
+      "created": "2026-01-15T15:58:49.643734"
+    },
+    {
+      "path": "data/chr2/001000000-002000000.chunk",
+      "reference": "chr2",
+      "start": 1000000,
+      "end": 2000000,
+      "reads": 39,
+      "size_bytes": 10257,
+      "compression": "none",
+      "checksum": "4f8381c8d8b18eacde2896807847e3a5ec6460a4214d98be9d7bcf762efcda9b",
+      "created": "2026-01-15T15:58:49.649997"
+    },
+    {
+      "path": "data/chr2/002000000-003000000.chunk",
+      "reference": "chr2",
+      "start": 2000000,
+      "end": 3000000,
+      "reads": 32,
+      "size_bytes": 8416,
+      "compression": "none",
+      "checksum": "b81204e4267c5800f6d382061c47ada82c989bee15560b92caf53cfd20be8b49",
+      "created": "2026-01-15T15:58:49.651329"
+    },
+    {
+      "path": "data/chr2/003000000-004000000.chunk",
+      "reference": "chr2",
+      "start": 3000000,
+      "end": 4000000,
+      "reads": 36,
+      "size_bytes": 9468,
+      "compression": "none",
+      "checksum": "1708e8f0f02c847bb1ee18c6dbd72d7cf84aa572f92c8a03f6070ca214bae11c",
+      "created": "2026-01-15T15:58:49.653826"
+    },
+    {
+      "path": "data/chr2/004000000-005000000.chunk",
+      "reference": "chr2",
+      "start": 4000000,
+      "end": 5000000,
+      "reads": 49,
+      "size_bytes": 12887,
+      "compression": "none",
+      "checksum": "8c6b55844f2f9301b303d938f4a8d0bfcbc3c81cb19149019bf7d61c79ecd9ee",
+      "created": "2026-01-15T15:58:49.656064"
+    },
+    {
+      "path": "data/chr2/005000000-006000000.chunk",
+      "reference": "chr2",
+      "start": 5000000,
+      "end": 6000000,
+      "reads": 28,
+      "size_bytes": 7364,
+      "compression": "none",
+      "checksum": "90597b57767f992d593d0bc61e6b287e6d13ec9d2f8695f46c3f65dd580e6dae",
+      "created": "2026-01-15T15:58:49.657229"
+    },
+    {
+      "path": "data/chr2/006000000-007000000.chunk",
+      "reference": "chr2",
+      "start": 6000000,
+      "end": 7000000,
+      "reads": 30,
+      "size_bytes": 7890,
+      "compression": "none",
+      "checksum": "3130c144400e02408e75be4d6434de883d43c0092293028f550492c83f42f413",
+      "created": "2026-01-15T15:58:49.657772"
+    },
+    {
+      "path": "data/chr2/007000000-008000000.chunk",
+      "reference": "chr2",
+      "start": 7000000,
+      "end": 8000000,
+      "reads": 35,
+      "size_bytes": 9205,
+      "compression": "none",
+      "checksum": "a1219b53aeaaf0d487c96dd4a1ed89a3acf52531d0688c132a72b967ec132c83",
+      "created": "2026-01-15T15:58:49.658416"
+    },
+    {
+      "path": "data/chr3/000000000-001000000.chunk",
+      "reference": "chr3",
+      "start": 0,
+      "end": 1000000,
+      "reads": 37,
+      "size_bytes": 9689,
+      "compression": "none",
+      "checksum": "f8e9f2aa990671403e23d77606ea6933a1683ce313ffc7f07d7e7a30a3f7a8ec",
+      "created": "2026-01-15T15:58:49.660564"
+    },
+    {
+      "path": "data/chr3/001000000-002000000.chunk",
+      "reference": "chr3",
+      "start": 1000000,
+      "end": 2000000,
+      "reads": 28,
+      "size_bytes": 7364,
+      "compression": "none",
+      "checksum": "85458774e44bfa2f58cf1a729a49a85a3830d6d0dc410c7a0a83ab302d8c3722",
+      "created": "2026-01-15T15:58:49.661235"
+    },
+    {
+      "path": "data/chr3/002000000-003000000.chunk",
+      "reference": "chr3",
+      "start": 2000000,
+      "end": 3000000,
+      "reads": 26,
+      "size_bytes": 6838,
+      "compression": "none",
+      "checksum": "547c1b35260c1778995f51707ccdc699c9ec177200ca487dda9946181f3c87ea",
+      "created": "2026-01-15T15:58:49.665284"
+    },
+    {
+      "path": "data/chr3/003000000-004000000.chunk",
+      "reference": "chr3",
+      "start": 3000000,
+      "end": 4000000,
+      "reads": 31,
+      "size_bytes": 8153,
+      "compression": "none",
+      "checksum": "4b56d3bbeed2764f7188e1ecbf7cce863c3423f25d4a7cfb35dfb852fd09076d",
+      "created": "2026-01-15T15:58:49.673055"
+    },
+    {
+      "path": "data/chr3/004000000-005000000.chunk",
+      "reference": "chr3",
+      "start": 4000000,
+      "end": 5000000,
+      "reads": 28,
+      "size_bytes": 7364,
+      "compression": "none",
+      "checksum": "cba99c06e5fd68c9e10244d9bcc27cbaed3d200bfa681af10fb4829a5ba7a41a",
+      "created": "2026-01-15T15:58:49.673800"
+    },
+    {
+      "path": "data/chr3/005000000-006000000.chunk",
+      "reference": "chr3",
+      "start": 5000000,
+      "end": 6000000,
+      "reads": 26,
+      "size_bytes": 6838,
+      "compression": "none",
+      "checksum": "254c9e2c74dc77faf15191e1cf8e799e2dcf1f342ddaa7d5128d11eaa00dd8dd",
+      "created": "2026-01-15T15:58:49.675398"
+    },
+    {
+      "path": "data/unmapped.chunk",
+      "reference": "unmapped",
+      "start": 0,
+      "end": 0,
+      "reads": 115,
+      "size_bytes": 29555,
+      "compression": "none",
+      "checksum": "a0abd53f3f847fa50f30d91b5220cec4d620adc93881fc0d4b4a6372d1ae0b3f",
+      "created": "2026-01-15T15:58:49.685872"
+    }
+  ],
+  "compression": {
+    "algorithm": "none"
+  },
+  "chunk_size": 1000000
+}

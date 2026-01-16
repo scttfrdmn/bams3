@@ -1,0 +1,201 @@
+package bams3
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+// Reader reads BAMS3 datasets
+type Reader struct {
+	dataset Dataset
+}
+
+// OpenDataset opens a BAMS3 dataset
+func OpenDataset(path string) (*Reader, error) {
+	r := &Reader{}
+
+	// Load metadata
+	metadataPath := filepath.Join(path, "_metadata.json")
+	if err := r.loadMetadata(metadataPath); err != nil {
+		return nil, fmt.Errorf("failed to load metadata: %w", err)
+	}
+
+	// Load header
+	headerPath := filepath.Join(path, "_header.json")
+	if err := r.loadHeader(headerPath); err != nil {
+		return nil, fmt.Errorf("failed to load header: %w", err)
+	}
+
+	// Load spatial index
+	indexPath := filepath.Join(path, "_index", "spatial.json")
+	if err := r.loadIndex(indexPath); err != nil {
+		return nil, fmt.Errorf("failed to load index: %w", err)
+	}
+
+	r.dataset.Path = path
+
+	return r, nil
+}
+
+// loadMetadata loads the metadata file
+func (r *Reader) loadMetadata(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	return json.Unmarshal(data, &r.dataset.Metadata)
+}
+
+// loadHeader loads the header file
+func (r *Reader) loadHeader(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	return json.Unmarshal(data, &r.dataset.Header)
+}
+
+// loadIndex loads the spatial index
+func (r *Reader) loadIndex(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	return json.Unmarshal(data, &r.dataset.Index)
+}
+
+// GetMetadata returns the dataset metadata
+func (r *Reader) GetMetadata() Metadata {
+	return r.dataset.Metadata
+}
+
+// GetHeader returns the SAM header
+func (r *Reader) GetHeader() Header {
+	return r.dataset.Header
+}
+
+// GetStatistics returns dataset statistics
+func (r *Reader) GetStatistics() Statistics {
+	return r.dataset.Metadata.Statistics
+}
+
+// FindChunks finds chunks that overlap with a region
+func (r *Reader) FindChunks(region Region) ([]ChunkInfo, error) {
+	var overlapping []ChunkInfo
+
+	for _, chunk := range r.dataset.Metadata.Chunks {
+		if chunk.Reference != region.Reference {
+			continue
+		}
+
+		// Check for overlap
+		if chunk.End > region.Start && chunk.Start < region.End {
+			overlapping = append(overlapping, chunk)
+		}
+	}
+
+	return overlapping, nil
+}
+
+// QueryRegion queries reads in a specific genomic region
+func (r *Reader) QueryRegion(region Region) ([]Read, error) {
+	// Find overlapping chunks
+	chunks, err := r.FindChunks(region)
+	if err != nil {
+		return nil, err
+	}
+
+	var reads []Read
+
+	// Load and filter reads from each chunk
+	for _, chunkInfo := range chunks {
+		chunkPath := filepath.Join(r.dataset.Path, chunkInfo.Path)
+		chunkReads, err := r.loadChunk(chunkPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load chunk %s: %w", chunkInfo.Path, err)
+		}
+
+		// Filter reads to exact region
+		for _, read := range chunkReads {
+			if read.Position >= region.Start && read.Position < region.End {
+				reads = append(reads, read)
+			}
+		}
+	}
+
+	return reads, nil
+}
+
+// loadChunk loads a chunk file and converts to Read objects
+func (r *Reader) loadChunk(path string) ([]Read, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var chunkReads []ChunkRead
+	if err := json.Unmarshal(data, &chunkReads); err != nil {
+		return nil, err
+	}
+
+	// Convert ChunkRead to Read
+	reads := make([]Read, len(chunkReads))
+	for i, cr := range chunkReads {
+		reads[i] = Read{
+			Name:           cr.Name,
+			Flag:           cr.Flag,
+			ReferenceID:    cr.Ref,
+			Position:       cr.Pos,
+			MappingQuality: cr.MapQ,
+			CIGAR:          cr.CIGAR,
+			Sequence:       cr.Seq,
+			Quality:        cr.Qual,
+			Tags:           cr.Tags,
+		}
+	}
+
+	return reads, nil
+}
+
+// ParseRegion parses a region string like "chr1:1000000-2000000"
+func ParseRegion(regionStr string) (Region, error) {
+	region := Region{}
+
+	// Split on ':'
+	parts := strings.Split(regionStr, ":")
+	if len(parts) != 2 {
+		return region, fmt.Errorf("invalid region format: %s (expected chr:start-end)", regionStr)
+	}
+
+	region.Reference = parts[0]
+
+	// Split on '-'
+	posParts := strings.Split(parts[1], "-")
+	if len(posParts) != 2 {
+		return region, fmt.Errorf("invalid region format: %s (expected chr:start-end)", regionStr)
+	}
+
+	_, err := fmt.Sscanf(posParts[0], "%d", &region.Start)
+	if err != nil {
+		return region, fmt.Errorf("invalid start position: %w", err)
+	}
+
+	_, err = fmt.Sscanf(posParts[1], "%d", &region.End)
+	if err != nil {
+		return region, fmt.Errorf("invalid end position: %w", err)
+	}
+
+	return region, nil
+}
+
+// Close closes the reader
+func (r *Reader) Close() error {
+	// Nothing to close for local files
+	return nil
+}
