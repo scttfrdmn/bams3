@@ -15,19 +15,22 @@ import (
 type Writer struct {
 	path        string
 	chunkSize   int
+	compression string
 	metadata    Metadata
 	header      Header
 	chunks      map[string][]ChunkRead // key: "ref:start:end"
 	chunkInfos  []ChunkInfo
 	statistics  Statistics
+	compressor  *Compressor
 }
 
 // NewWriter creates a new BAMS3 writer
-func NewWriter(path string, chunkSize int) (*Writer, error) {
+func NewWriter(path string, chunkSize int, compression string) (*Writer, error) {
 	w := &Writer{
-		path:      path,
-		chunkSize: chunkSize,
-		chunks:    make(map[string][]ChunkRead),
+		path:        path,
+		chunkSize:   chunkSize,
+		compression: compression,
+		chunks:      make(map[string][]ChunkRead),
 		metadata: Metadata{
 			Format:     "bams3",
 			Version:    "0.1.0",
@@ -35,9 +38,18 @@ func NewWriter(path string, chunkSize int) (*Writer, error) {
 			CreatedBy:  "bams3-go",
 			ChunkSize:  chunkSize,
 			Compression: CompressionConfig{
-				Algorithm: "none",
+				Algorithm: compression,
 			},
 		},
+	}
+
+	// Initialize compressor if compression is enabled
+	if compression == "zstd" {
+		compressor, err := NewCompressor()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create compressor: %w", err)
+		}
+		w.compressor = compressor
 	}
 
 	// Create directory structure
@@ -151,12 +163,20 @@ func (w *Writer) Finalize() error {
 		return fmt.Errorf("failed to write spatial index: %w", err)
 	}
 
+	// Close compressor if used
+	if w.compressor != nil {
+		w.compressor.Close()
+	}
+
 	fmt.Println("✓ Conversion complete!")
 	fmt.Printf("\nDataset summary:\n")
 	fmt.Printf("  Location: %s\n", w.path)
 	fmt.Printf("  Total reads: %d\n", w.statistics.TotalReads)
 	fmt.Printf("  Mapped reads: %d\n", w.statistics.MappedReads)
 	fmt.Printf("  Chunks: %d\n", len(w.chunkInfos))
+	if w.compression != "none" {
+		fmt.Printf("  Compression: %s\n", w.compression)
+	}
 
 	return nil
 }
@@ -205,11 +225,21 @@ func (w *Writer) writeChunk(chunkKey string, reads []ChunkRead) error {
 		return err
 	}
 
+	// Compress if enabled
+	compressionType := w.compression
+	if w.compressor != nil && compressionType == "zstd" {
+		compressed, err := w.compressor.Compress(data)
+		if err != nil {
+			return fmt.Errorf("failed to compress chunk: %w", err)
+		}
+		data = compressed
+	}
+
 	if err := os.WriteFile(chunkPath, data, 0644); err != nil {
 		return err
 	}
 
-	// Calculate checksum
+	// Calculate checksum (of compressed data)
 	hash := sha256.Sum256(data)
 	checksum := fmt.Sprintf("%x", hash)
 
@@ -227,7 +257,7 @@ func (w *Writer) writeChunk(chunkKey string, reads []ChunkRead) error {
 		End:         end,
 		Reads:       len(reads),
 		SizeBytes:   info.Size(),
-		Compression: "none",
+		Compression: compressionType,
 		Checksum:    checksum,
 		Created:     time.Now(),
 	}

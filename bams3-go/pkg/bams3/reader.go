@@ -139,6 +139,24 @@ func (r *Reader) loadChunk(path string) ([]Read, error) {
 		return nil, err
 	}
 
+	// Find chunk info to check compression
+	var chunkInfo *ChunkInfo
+	for i := range r.dataset.Metadata.Chunks {
+		if filepath.Join(r.dataset.Path, r.dataset.Metadata.Chunks[i].Path) == path {
+			chunkInfo = &r.dataset.Metadata.Chunks[i]
+			break
+		}
+	}
+
+	// Decompress if needed
+	if chunkInfo != nil && chunkInfo.Compression == "zstd" {
+		decompressed, err := Decompress(data)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decompress chunk: %w", err)
+		}
+		data = decompressed
+	}
+
 	var chunkReads []ChunkRead
 	if err := json.Unmarshal(data, &chunkReads); err != nil {
 		return nil, err

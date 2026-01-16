@@ -10,7 +10,7 @@ import (
 )
 
 // ConvertBAMToBAMS3 converts a BAM file to BAMS3 format
-func ConvertBAMToBAMS3(bamPath string, outputPath string, chunkSize int) error {
+func ConvertBAMToBAMS3(bamPath string, outputPath string, chunkSize int, compression string) error {
 	fmt.Printf("Converting %s to BAMS3 format...\n", bamPath)
 	fmt.Printf("Output directory: %s\n", outputPath)
 	fmt.Printf("Chunk size: %d bp\n\n", chunkSize)
@@ -29,7 +29,7 @@ func ConvertBAMToBAMS3(bamPath string, outputPath string, chunkSize int) error {
 	defer bamFile.Close()
 
 	// Create BAMS3 writer
-	writer, err := bams3.NewWriter(outputPath, chunkSize)
+	writer, err := bams3.NewWriter(outputPath, chunkSize, compression)
 	if err != nil {
 		return fmt.Errorf("failed to create BAMS3 writer: %w", err)
 	}

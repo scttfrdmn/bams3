@@ -6,7 +6,8 @@ import (
 )
 
 var (
-	chunkSize int
+	chunkSize   int
+	compression string
 )
 
 var convertCmd = &cobra.Command{
@@ -25,11 +26,13 @@ Example:
 		inputBAM := args[0]
 		outputBAMS3 := args[1]
 
-		return bam.ConvertBAMToBAMS3(inputBAM, outputBAMS3, chunkSize)
+		return bam.ConvertBAMToBAMS3(inputBAM, outputBAMS3, chunkSize, compression)
 	},
 }
 
 func init() {
 	convertCmd.Flags().IntVar(&chunkSize, "chunk-size", 1000000,
 		"Chunk size in base pairs (default 1Mbp)")
+	convertCmd.Flags().StringVar(&compression, "compression", "none",
+		"Compression algorithm: none, zstd (default: none)")
 }
