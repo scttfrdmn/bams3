@@ -19,7 +19,7 @@ echo ""
 
 # Configuration
 PROFILE="aws"
-REGION="us-west-2"
+REGION="us-east-1"
 SAMPLE="NA12878"
 S3_OUTPUT="s3://bams3-testing-${USER}/NA12878_full.bams3"
 
@@ -43,9 +43,9 @@ echo "  Reads:      ~1 billion"
 echo "  S3 output:  $S3_OUTPUT"
 echo ""
 echo -e "${YELLOW}Warning: This test will:${NC}"
-echo "  • Download ~100GB from 1000 Genomes (cross-region)"
+echo "  • Download ~100GB from 1000 Genomes (same-region, no transfer cost)"
 echo "  • Take approximately 4 hours"
-echo "  • Cost ~$11 (EC2 + data transfer + S3 storage)"
+echo "  • Cost ~$9 (EC2 + S3 storage)"
 echo ""
 
 read -p "Continue? (yes/no) " -r
@@ -57,7 +57,7 @@ echo ""
 
 # Step 1: Download NA12878 FASTQ
 echo -e "${BLUE}[1/4] Downloading NA12878 FASTQ files from 1000 Genomes...${NC}"
-echo -e "${YELLOW}Note: Cross-region transfer (us-east-1 → us-west-2)${NC}"
+echo -e "${GREEN}Note: Same-region transfer (us-east-1) - no cross-region costs${NC}"
 echo "  This will take approximately 30 minutes"
 echo ""
 

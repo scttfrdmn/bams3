@@ -18,7 +18,7 @@ echo ""
 
 # Configuration
 PROFILE="aws"
-REGION="us-west-2"
+REGION="us-east-1"
 REPORT_FILE="WGS_TEST_RESULTS.md"
 
 # Check for test results
@@ -58,7 +58,7 @@ cat > $REPORT_FILE << 'OUTER_EOF'
 
 **Date**: REPORT_DATE_PLACEHOLDER
 **Instance**: c5.9xlarge (36 vCPU, 72GB RAM)
-**Region**: us-west-2
+**Region**: us-east-1 (same as 1000 Genomes data)
 **Test Suite Version**: 1.0
 
 ---

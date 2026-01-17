@@ -19,14 +19,14 @@ echo ""
 
 # Configuration
 PROFILE="aws"
-REGION="us-west-2"
+REGION="us-east-1"
 BUCKET_NAME="bams3-testing-${USER}"
 INSTANCE_TYPE="c5.9xlarge"
 VOLUME_SIZE=500
 
 echo -e "${BLUE}Configuration:${NC}"
 echo "  AWS Profile:   $PROFILE"
-echo "  Region:        $REGION"
+echo "  Region:        $REGION (same as 1000 Genomes data)"
 echo "  S3 Bucket:     $BUCKET_NAME"
 echo "  Instance Type: $INSTANCE_TYPE"
 echo "  Disk Size:     ${VOLUME_SIZE}GB"
@@ -85,7 +85,7 @@ echo "  Security group: $SG_ID"
 echo ""
 
 INSTANCE_ID=$(aws --profile $PROFILE ec2 run-instances \
-  --image-id ami-0c2ab3b8efb09f272 \
+  --image-id ami-0c55b159cbfafe1f0 \
   --instance-type $INSTANCE_TYPE \
   --region $REGION \
   --key-name "$KEY_NAME" \

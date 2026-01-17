@@ -7,15 +7,15 @@ Complete AWS-based testing suite for BAMS3 validation with real whole-genome seq
 These scripts automate the provisioning, testing, and reporting of BAMS3 performance with production-scale genomics data (NA12878, 30x WGS coverage, ~1 billion reads).
 
 **Total Test Time**: ~6 hours
-**Total Cost**: ~$11 (EC2 + S3 + data transfer)
-**Region**: us-west-2
+**Total Cost**: ~$9 (EC2 + S3 storage)
+**Region**: us-east-1 (same as 1000 Genomes - no cross-region costs)
 **AWS Profile**: `aws`
 
 ## Prerequisites
 
 ### Local Requirements
 - AWS CLI configured with profile named `aws`
-- SSH key pair in us-west-2
+- SSH key pair in us-east-1
 - Security group allowing SSH (port 22)
 - IAM role: `BAMS3-Testing-Role` with permissions:
   - S3 read from `s3://1000genomes/*`
@@ -268,7 +268,7 @@ aws --profile aws s3 cp /data/results/ s3://bams3-testing-${USER}/results/ --rec
 
 ```bash
 # From local machine
-aws --profile aws ec2 terminate-instances --instance-ids <instance-id> --region us-west-2
+aws --profile aws ec2 terminate-instances --instance-ids <instance-id> --region us-east-1
 
 # S3 bucket and results will remain
 ```
@@ -277,10 +277,10 @@ aws --profile aws ec2 terminate-instances --instance-ids <instance-id> --region 
 
 ```bash
 # Delete S3 bucket
-aws --profile aws s3 rb s3://bams3-testing-${USER} --force --region us-west-2
+aws --profile aws s3 rb s3://bams3-testing-${USER} --force --region us-east-1
 
 # Terminate instance
-aws --profile aws ec2 terminate-instances --instance-ids <instance-id> --region us-west-2
+aws --profile aws ec2 terminate-instances --instance-ids <instance-id> --region us-east-1
 ```
 
 ## Cost Breakdown
@@ -289,8 +289,8 @@ aws --profile aws ec2 terminate-instances --instance-ids <instance-id> --region 
 |------|------|-------|
 | EC2 (6 hours) | $9.18 | c5.9xlarge @ $1.53/hour |
 | S3 storage | $0.23/month | ~10GB @ $0.023/GB/month |
-| Data transfer | $2.00 | Cross-region (us-east-1 → us-west-2) |
-| **Total** | **$11.20** | One-time cost |
+| Data transfer | $0.00 | Same-region (us-east-1) - FREE |
+| **Total** | **$9.18** | One-time cost |
 
 ## Next Steps
 

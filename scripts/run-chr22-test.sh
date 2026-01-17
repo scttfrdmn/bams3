@@ -19,7 +19,7 @@ echo ""
 
 # Configuration
 PROFILE="aws"
-REGION="us-west-2"
+REGION="us-east-1"
 SAMPLE="NA12878"
 S3_OUTPUT="s3://bams3-testing-${USER}/chr22_test.bams3"
 
@@ -43,7 +43,7 @@ echo ""
 
 # Step 1: Download chr22 FASTQ subset from 1000 Genomes
 echo -e "${BLUE}[1/5] Downloading chr22 FASTQ subset from 1000 Genomes...${NC}"
-echo -e "${YELLOW}Note: Cross-region transfer (us-east-1 → us-west-2)${NC}"
+echo -e "${GREEN}Note: Same-region transfer (us-east-1) - no cross-region costs${NC}"
 echo ""
 
 DOWNLOAD_START=$(date +%s)
