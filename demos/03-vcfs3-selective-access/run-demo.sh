@@ -235,7 +235,7 @@ echo ""
 # Sample + region needs just 1 chunk!
 SELECTIVE_CHUNKS=1
 SELECTIVE_SIZE=$((SELECTIVE_CHUNKS * 200))  # KB
-SELECTIVE_DOWNLOAD=$(echo "scale=0; $SELECTIVE_SIZE)"K"
+SELECTIVE_DOWNLOAD=$(echo "scale=0; $SELECTIVE_SIZE" | bc)"K"
 SELECTIVE_COST=$(echo "scale=6; $SELECTIVE_SIZE / 1024 / 1024 * 0.09" | bc)
 
 echo "    Chunks needed:  $SELECTIVE_CHUNKS / 50 (2%)"

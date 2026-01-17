@@ -70,7 +70,22 @@ for demo_info in "${DEMOS[@]}"; do
 
     # Run demo
     START=$(date +%s)
-    if cd "$demo_dir" && ./run-demo.sh; then
+    if [ "$INTERACTIVE" = true ]; then
+        if cd "$demo_dir" && ./run-demo.sh; then
+            cd_result=0
+        else
+            cd_result=$?
+        fi
+    else
+        # In CI mode, automatically answer "n" to cleanup prompts
+        if cd "$demo_dir" && echo "n" | ./run-demo.sh; then
+            cd_result=0
+        else
+            cd_result=$?
+        fi
+    fi
+
+    if [ $cd_result -eq 0 ]; then
         END=$(date +%s)
         ELAPSED=$((END - START))
 

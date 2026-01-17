@@ -22,10 +22,10 @@ echo ""
 command -v bwa >/dev/null 2>&1 || { echo "BWA not found. Install with: brew install bwa"; exit 1; }
 command -v samtools >/dev/null 2>&1 || { echo "samtools not found. Install with: brew install samtools"; exit 1; }
 
-# Find BAMS3 binary
+# Find BAMS3 binary (before changing directory)
 BAMS3_BIN=""
-if [ -f "../../../bams3-go/bams3" ]; then
-    BAMS3_BIN="../../../bams3-go/bams3"
+if [ -f "../../bams3-go/bams3" ]; then
+    BAMS3_BIN="$(cd ../.. && pwd)/bams3-go/bams3"
 elif command -v bams3 >/dev/null 2>&1; then
     BAMS3_BIN="bams3"
 else
