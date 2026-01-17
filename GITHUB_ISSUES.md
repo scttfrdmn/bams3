@@ -855,7 +855,306 @@ Add optional telemetry to understand usage patterns (with user consent).
 
 ---
 
-### Issue #29: Create Homebrew Formula
+### Issue #29: Migration Tools - Convert Existing Datasets
+**Labels**: `type: enhancement`, `priority: high`, `component: core`
+
+**Description**:
+Create migration tools to convert existing datasets to cloud-native formats without re-processing from raw data.
+
+**Problem**:
+Users have existing BAM/VCF files and want to:
+- Migrate to BAMS3/VCFS3 without re-aligning from FASTQ
+- Convert between sharded/non-sharded versions
+- Update to newer format versions
+- Move between storage backends (local ↔ S3 ↔ Azure ↔ GCS)
+- Re-chunk with different parameters
+- Re-compress with different algorithms
+
+**Migration Scenarios**:
+
+#### 1. BAM → BAMS3
+```bash
+bams3 migrate existing.bam migrated.bams3 \
+  --storage s3://bucket/ \
+  --workers 16 \
+  --sort-buffer 32G
+```
+
+**Requirements**:
+- [ ] Preserve all alignment information
+- [ ] Maintain coordinate sorting
+- [ ] Validate read counts match
+- [ ] Support both local and S3 input/output
+- [ ] Progress reporting for large files
+- [ ] Resume capability for interrupted migrations
+- [ ] Dry-run mode to estimate time/cost
+
+#### 2. VCF → VCFS3
+```bash
+vcfs3 migrate cohort.vcf.gz migrated.vcfs3 \
+  --sample-chunk-size 100 \
+  --genomic-chunk-size 1M \
+  --enable-sharding \
+  --sharding-bits 8
+```
+
+**Requirements**:
+- [ ] Preserve all variant information
+- [ ] Maintain sample order (or allow reordering)
+- [ ] Validate variant counts
+- [ ] Support BCF input
+- [ ] Handle missing genotypes correctly
+
+#### 3. Non-Sharded → Sharded
+```bash
+# Migrate existing VCFS3 to sharded version
+vcfs3 migrate old.vcfs3 new-sharded.vcfs3 \
+  --enable-sharding \
+  --sharding-bits 8 \
+  --parallel
+
+# Automatically distributes chunks across prefixes
+```
+
+**Requirements**:
+- [ ] Read from non-sharded structure
+- [ ] Write to sharded structure
+- [ ] Preserve all data
+- [ ] No decompression/recompression (just move files + update manifest)
+- [ ] Atomic operation (old version remains valid until complete)
+
+#### 4. Format Version Upgrade
+```bash
+# Upgrade to newer format version
+bams3 migrate old-v0.1.bams3 new-v0.2.bams3 \
+  --format-version 0.2 \
+  --preserve-old
+```
+
+**Requirements**:
+- [ ] Detect source format version
+- [ ] Apply necessary transformations
+- [ ] Validate after migration
+- [ ] Document breaking changes
+- [ ] Option to keep old version
+
+#### 5. Re-chunking
+```bash
+# Change chunk size for better query performance
+bams3 migrate input.bams3 output.bams3 \
+  --chunk-size 2M  # Was 1M
+```
+
+**Use case**: Optimize chunk size based on observed query patterns
+
+#### 6. Re-compression
+```bash
+# Change compression algorithm or level
+bams3 migrate input.bams3 output.bams3 \
+  --compression zstd \
+  --compression-level 5  # Was 3
+```
+
+**Use case**: Trade storage for speed or vice versa
+
+#### 7. Storage Backend Migration
+```bash
+# Local → S3
+bams3 migrate local/dataset.bams3 s3://bucket/dataset.bams3
+
+# S3 → Azure
+bams3 migrate s3://bucket/dataset.bams3 azure://container/dataset.bams3
+
+# S3 → Local (for archival)
+bams3 migrate s3://bucket/dataset.bams3 /archive/dataset.bams3
+```
+
+**Requirements**:
+- [ ] Parallel transfer for speed
+- [ ] Resume capability for network failures
+- [ ] Integrity verification (checksums)
+- [ ] Cost estimation
+- [ ] Progress reporting
+
+#### 8. Batch Migration
+```bash
+# Migrate multiple datasets
+bams3 migrate-batch manifest.txt \
+  --source local/ \
+  --dest s3://bucket/ \
+  --parallel 4 \
+  --log migration.log
+```
+
+**manifest.txt**:
+```
+sample1.bam
+sample2.bam
+sample3.bam
+```
+
+**Implementation**:
+
+**Core Components**:
+1. **Format Reader**: Generic interface to read BAMS3/VCFS3
+2. **Format Writer**: Generic interface to write BAMS3/VCFS3
+3. **Migration Pipeline**: Orchestrates read → transform → write
+4. **Validation**: Ensures data integrity after migration
+5. **Progress Tracking**: Reports progress and estimates time remaining
+6. **Resume Capability**: Checkpoint-based resumption for large migrations
+
+**API Design**:
+```go
+package migrate
+
+type MigrationOptions struct {
+    Source              string
+    Destination         string
+    ChunkSize           int64
+    Compression         string
+    CompressionLevel    int
+    EnableSharding      bool
+    ShardingBits        int
+    Workers             int
+    ValidateAfter       bool
+    DryRun              bool
+    Resume              bool
+    CheckpointFile      string
+}
+
+type Migrator struct {
+    opts    MigrationOptions
+    logger  *log.Logger
+    metrics *MigrationMetrics
+}
+
+func NewMigrator(opts MigrationOptions) *Migrator
+
+func (m *Migrator) Migrate(ctx context.Context) error
+func (m *Migrator) Validate(ctx context.Context) error
+func (m *Migrator) GetProgress() *MigrationProgress
+```
+
+**Safety Features**:
+- Atomic operations (source remains valid until complete)
+- Validation before cleanup
+- Dry-run mode
+- Rollback capability
+- Detailed logging
+
+**Performance**:
+- Parallel chunk processing
+- Direct chunk copying when possible (no decompression)
+- Streaming for large datasets
+- Network optimization for cloud transfers
+
+**Monitoring**:
+- Real-time progress
+- ETA calculation
+- Bandwidth usage
+- Cost tracking (for cloud)
+
+**Success Criteria**:
+- [ ] Migrates 100GB BAM in <30 minutes (local → S3)
+- [ ] Zero data loss (validated)
+- [ ] Resumes correctly after interruption
+- [ ] Clear error messages
+- [ ] Documentation with examples
+
+**Testing**:
+- Small dataset migration (all scenarios)
+- Large dataset migration (100GB+)
+- Interrupted migration + resume
+- Format version upgrades
+- Cross-cloud migration
+
+---
+
+### Issue #30: Demoable Examples and Benchmarks
+**Labels**: `type: documentation`, `priority: high`, `component: docs`
+
+**Description**:
+Create interactive demos showcasing key features in <5 minutes each.
+
+**Goal**: Stakeholders and users can quickly see value without reading docs.
+
+**Demo 1: Basic Workflow** (2 min)
+- BWA → BAMS3 streaming
+- Zero intermediate files
+- Storage savings visualization
+
+**Demo 2: S3 Sharding Performance** (3 min)
+- Directory structure comparison
+- Simulated concurrent queries (1, 10, 100, 1000)
+- Performance chart showing 100× improvement
+- Already created: `demos/02-sharding-performance/`
+
+**Demo 3: VCFS3 Selective Access** (3 min)
+- Multi-sample VCF conversion
+- Single sample extraction (downloads 1/10th)
+- Region extraction (downloads 1/1000th)
+- Sample + region (downloads 1/10,000th)
+- Cost comparison table
+
+**Demo 4: Cloud vs Traditional** (3 min)
+- Traditional: Download 100GB → extract → analyze
+- BAMS3: Stream 5MB → analyze
+- Multiple query scenario
+- Cumulative savings chart
+
+**Demo 5: Production Pipeline** (5 min)
+- Nextflow end-to-end
+- Parallel processing
+- Resource monitoring
+- QC report
+
+**Demo 6: Migration Tools** (3 min)
+- Existing BAM → BAMS3
+- Non-sharded → sharded
+- Format version upgrade
+- Storage backend migration
+
+**Implementation**:
+- [ ] Create `demos/` directory structure
+- [ ] Each demo has:
+  - `README.md` - Description and instructions
+  - `run-demo.sh` - Self-contained script
+  - `setup.sh` - One-time setup
+  - Small synthetic datasets (<100MB)
+  - Expected output examples
+- [ ] `run-all-demos.sh` - Complete demo suite
+- [ ] Generates HTML report with metrics
+- [ ] CI integration (test demos don't break)
+- [ ] Video recordings for async viewing
+- [ ] Presentation mode (verbose, slow, interactive)
+
+**Demo Requirements**:
+- Docker or local installation
+- Minimal: 4 CPU, 8GB RAM, 5GB disk
+- Optional: AWS account (free tier sufficient)
+- Total cost per demo run: <$0.50
+
+**Output**:
+- Clear visual comparisons
+- Performance metrics
+- Cost analysis
+- Executive summary
+
+**Success Criteria**:
+- Non-technical stakeholders understand value
+- Technical users can run demos in <5 minutes
+- Demos work on clean systems
+- Used in presentations and sales
+
+**Documentation**:
+- `demos/README.md` - Demo catalog
+- Individual demo READMEs
+- Video walkthroughs
+- Troubleshooting guide
+
+---
+
+### Issue #32: Create Homebrew Formula
 **Labels**: `type: enhancement`, `priority: medium`
 
 **Description**:
@@ -867,7 +1166,7 @@ brew install bams3
 
 ---
 
-### Issue #30: Create Bioconda Package
+### Issue #34: Create Bioconda Package
 **Labels**: `type: enhancement`, `priority: high`
 
 **Description**:
@@ -875,7 +1174,7 @@ Submit to Bioconda for bioinformatics community distribution.
 
 ---
 
-### Issue #31: Write Announcement Blog Post
+### Issue #33: Write Announcement Blog Post
 **Labels**: `type: documentation`, `priority: high`
 
 **Description**:
@@ -899,7 +1198,7 @@ Write comprehensive blog post announcing BAMS3 v1.0.0.
 
 ---
 
-### Issue #32: Submit to bioRxiv (Future)
+### Issue #35: Submit to bioRxiv (Future)
 **Labels**: `type: documentation`, `priority: low`
 
 **Description**:
