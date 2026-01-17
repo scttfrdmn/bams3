@@ -213,6 +213,164 @@ type Options struct {
    }
    ```
 
+#### Sharding Interface
+
+**Purpose**: Distribute chunks across S3 prefixes for higher aggregate throughput
+
+```go
+package storage
+
+import (
+	"crypto/sha256"
+	"fmt"
+)
+
+// Sharding strategy determines how to distribute chunks across prefixes
+type ShardingStrategy interface {
+	// GetPrefix returns the S3 prefix for a given chunk path
+	GetPrefix(chunkPath string) string
+
+	// NumPrefixes returns the total number of prefixes
+	NumPrefixes() int
+
+	// IsEnabled returns whether sharding is enabled
+	IsEnabled() bool
+}
+
+// NoSharding uses sequential prefixes (default, backward compatible)
+type NoSharding struct{}
+
+func (n *NoSharding) GetPrefix(chunkPath string) string {
+	return ""
+}
+
+func (n *NoSharding) NumPrefixes() int {
+	return 1
+}
+
+func (n *NoSharding) IsEnabled() bool {
+	return false
+}
+
+// HashSharding distributes chunks using hash-based prefixes
+type HashSharding struct {
+	Bits int  // 4 bits = 16 prefixes, 6 bits = 64, 8 bits = 256
+}
+
+func NewHashSharding(bits int) *HashSharding {
+	if bits < 4 || bits > 8 {
+		bits = 8  // Default to 8 bits (256 prefixes)
+	}
+	return &HashSharding{Bits: bits}
+}
+
+func (h *HashSharding) GetPrefix(chunkPath string) string {
+	// Hash the chunk path
+	hash := sha256.Sum256([]byte(chunkPath))
+
+	// Take first N bits
+	prefixValue := hash[0] >> (8 - h.Bits)
+
+	// Convert to hex (1 or 2 chars depending on bits)
+	if h.Bits <= 4 {
+		return fmt.Sprintf("%x", prefixValue)
+	}
+	return fmt.Sprintf("%02x", prefixValue)
+}
+
+func (h *HashSharding) NumPrefixes() int {
+	return 1 << h.Bits  // 2^bits
+}
+
+func (h *HashSharding) IsEnabled() bool {
+	return true
+}
+
+// ShardedStorage wraps a storage backend with sharding support
+type ShardedStorage struct {
+	backend  Storage
+	strategy ShardingStrategy
+}
+
+func NewShardedStorage(backend Storage, strategy ShardingStrategy) *ShardedStorage {
+	return &ShardedStorage{
+		backend:  backend,
+		strategy: strategy,
+	}
+}
+
+func (s *ShardedStorage) Open(ctx context.Context, path string) (Reader, error) {
+	// Prepend shard prefix
+	shardedPath := s.getShardedPath(path)
+	return s.backend.Open(ctx, shardedPath)
+}
+
+func (s *ShardedStorage) Create(ctx context.Context, path string) (Writer, error) {
+	shardedPath := s.getShardedPath(path)
+	return s.backend.Create(ctx, shardedPath)
+}
+
+func (s *ShardedStorage) getShardedPath(path string) string {
+	if !s.strategy.IsEnabled() {
+		return path
+	}
+
+	prefix := s.strategy.GetPrefix(path)
+	if prefix == "" {
+		return path
+	}
+
+	return prefix + "/" + path
+}
+
+// List implementation needs to scan all prefixes
+func (s *ShardedStorage) List(ctx context.Context, prefix string) ([]FileInfo, error) {
+	if !s.strategy.IsEnabled() {
+		return s.backend.List(ctx, prefix)
+	}
+
+	// List across all shard prefixes
+	var allFiles []FileInfo
+	numPrefixes := s.strategy.NumPrefixes()
+
+	for i := 0; i < numPrefixes; i++ {
+		shardPrefix := fmt.Sprintf("%02x/%s", i, prefix)
+		files, err := s.backend.List(ctx, shardPrefix)
+		if err != nil {
+			return nil, err
+		}
+		allFiles = append(allFiles, files...)
+	}
+
+	return allFiles, nil
+}
+```
+
+**Usage in Format Implementation**:
+```go
+// Without sharding (default)
+storage := storage.NewS3Storage(opts)
+
+// With sharding enabled
+baseStorage := storage.NewS3Storage(opts)
+sharding := storage.NewHashSharding(8)  // 256 prefixes
+storage := storage.NewShardedStorage(baseStorage, sharding)
+
+// Both work with same interface
+reader, _ := storage.Open(ctx, "chunks/chr1/00000000-01000000.chunk")
+```
+
+**When to Enable**:
+- Large cohorts (>1,000 samples for VCFS3)
+- High query volume (>100 concurrent queries)
+- Production pipelines with many users
+- Skip for local storage (no benefit)
+
+**Performance**:
+- No sharding: 5,500 requests/sec (single prefix limit)
+- 8-bit sharding: 1.4M requests/sec (256 prefixes × 5,500)
+- 100× throughput increase for concurrent workloads
+
 #### Chunking Interface
 
 **Purpose**: Define how data is divided into chunks

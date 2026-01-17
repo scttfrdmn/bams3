@@ -404,9 +404,86 @@ Create comprehensive documentation for VCFS3 format and tools.
 
 ---
 
+### Issue #18: S3 Parallel Prefix Optimization for High Throughput
+**Labels**: `type: enhancement`, `priority: medium`, `format: vcfs3`, `component: core`
+**Milestone**: VCFS3 Prototype (v0.1.0)
+
+**Description**:
+Implement hash-based prefix sharding for S3 to enable higher aggregate throughput for large cohorts and concurrent queries.
+
+**Problem**:
+Current design uses sequential prefixes (e.g., `chunks/chr1/...`). This limits S3 request rates to ~5,500 requests/second per prefix. For large cohorts with concurrent queries, this becomes a bottleneck:
+- VCFS3 with 2,504 samples: 26 chunks per genomic position
+- 100 concurrent queries: 2,600 S3 GET requests
+- Could hit rate limits with >200 concurrent queries
+
+**Solution - Hash-Based Sharding**:
+Distribute chunks across multiple S3 prefixes using hash-based sharding:
+
+**Before** (sequential):
+```
+chunks/chr1/00000000-01000000/samples_000-099.chunk.zst
+chunks/chr1/00000000-01000000/samples_100-199.chunk.zst
+```
+
+**After** (hash-sharded):
+```
+chunks/8a/chr1/00000000-01000000/samples_000-099.chunk.zst
+chunks/f2/chr1/00000000-01000000/samples_100-199.chunk.zst
+chunks/1d/chr1/01000000-02000000/samples_000-099.chunk.zst
+```
+
+**Benefits**:
+- 100x higher aggregate throughput (256 prefixes → ~1.4M requests/sec)
+- Supports 50,000+ concurrent queries
+- Reduced latency under high load
+- Better scaling for large cohorts
+
+**Implementation**:
+- [ ] Add `ShardingStrategy` interface to core library
+- [ ] Implement `HashSharding` (SHA-256 based, configurable bits: 4, 6, 8)
+- [ ] Implement `NoSharding` (default, backward compatible)
+- [ ] Add `--enable-sharding` flag to converters
+- [ ] Update manifest to track sharding configuration
+- [ ] Modify query engine to scan multiple prefixes when sharding enabled
+- [ ] Document when to enable sharding (cohorts >1000 samples, high query volume)
+
+**Configuration**:
+```bash
+# Enable for high-throughput scenarios
+vcfs3 convert cohort.vcf s3://bucket/cohort.vcfs3 \
+    --enable-sharding \
+    --sharding-bits 8  # 256 prefixes
+
+# Queries work transparently
+vcfs3 query s3://bucket/cohort.vcfs3 --sample NA12878
+```
+
+**Trade-offs**:
+- Pros: Higher throughput, better scaling, reduced latency
+- Cons: More complex directory structure, listing chunks requires scanning multiple prefixes
+- Recommendation: Default disabled, enable for large cohorts (>1000 samples)
+
+**Benchmarking**:
+Compare query performance with/without sharding:
+- Single query: Should be similar (no benefit)
+- 100 concurrent queries: Should see improvement
+- 1000 concurrent queries: Should see 10x+ improvement
+
+**Success Criteria**:
+- Supports 1000+ concurrent queries without S3 rate limiting
+- No performance regression for single queries
+- Documentation clearly explains when to enable
+
+**References**:
+- AWS S3 Performance Guidelines: https://docs.aws.amazon.com/AmazonS3/latest/userguide/optimizing-performance.html
+- S3 request rate limits: 5,500 GET/HEAD per second per prefix
+
+---
+
 ## Issues for Milestone 3: Core Library Extraction
 
-### Issue #18: Design Shared Core Library Architecture
+### Issue #19: Design Shared Core Library Architecture
 **Labels**: `type: research`, `priority: high`, `component: core`
 **Milestone**: Core Library Extraction
 
@@ -467,7 +544,7 @@ core/
 
 ---
 
-### Issue #19: Extract S3 Client to Core Library
+### Issue #20: Extract S3 Client to Core Library
 **Labels**: `type: enhancement`, `priority: high`, `component: core`
 **Milestone**: Core Library Extraction
 
@@ -496,7 +573,7 @@ type Storage interface {
 
 ---
 
-### Issue #20: Extract Compression to Core Library
+### Issue #21: Extract Compression to Core Library
 **Labels**: `type: enhancement`, `priority: medium`, `component: core`
 **Milestone**: Core Library Extraction
 
@@ -511,7 +588,7 @@ Extract compression utilities into shared core library.
 
 ---
 
-### Issue #21: Create Format Design Guide
+### Issue #22: Create Format Design Guide
 **Labels**: `type: documentation`, `priority: medium`, `component: docs`
 **Milestone**: Core Library Extraction
 
@@ -547,7 +624,7 @@ Document best practices for designing new cloud-native formats.
 
 ## Issues for Milestone 4: Format Expansion (Research)
 
-### Issue #22: Research Video Format - Requirements Gathering
+### Issue #23: Research Video Format - Requirements Gathering
 **Labels**: `type: research`, `priority: medium`, `format: research-video`
 **Milestone**: Format Expansion
 
@@ -573,7 +650,7 @@ Gather requirements from researchers who work with annotated video data.
 
 ---
 
-### Issue #23: Research Video Format - Design Specification
+### Issue #24: Research Video Format - Design Specification
 **Labels**: `type: research`, `priority: medium`, `format: research-video`
 **Milestone**: Format Expansion
 
@@ -609,7 +686,7 @@ study.rvid/
 
 ---
 
-### Issue #24: Imaging Formats - Requirements Survey
+### Issue #25: Imaging Formats - Requirements Survey
 **Labels**: `type: research`, `priority: medium`, `format: imaging`
 **Milestone**: Format Expansion
 
@@ -664,7 +741,7 @@ Survey imaging community needs across medical, microscopy, and research imaging.
 
 ---
 
-### Issue #25: CryoEM Format Design - Prototype
+### Issue #26: CryoEM Format Design - Prototype
 **Labels**: `type: research`, `priority: medium`, `format: cryoem`
 **Milestone**: Format Expansion
 
@@ -709,7 +786,7 @@ cryoem_session.crys3/
 
 ---
 
-### Issue #26: ML Embeddings Format - Feasibility Study
+### Issue #27: ML Embeddings Format - Feasibility Study
 **Labels**: `type: research`, `priority: low`, `format: embeddings`
 **Milestone**: Format Expansion
 
@@ -762,7 +839,7 @@ Evaluate whether chunked embeddings format would be valuable.
 
 ## Additional Issues to Consider
 
-### Issue #26: Add Telemetry/Analytics (Optional)
+### Issue #28: Add Telemetry/Analytics (Optional)
 **Labels**: `type: enhancement`, `priority: low`
 
 **Description**:
@@ -778,7 +855,7 @@ Add optional telemetry to understand usage patterns (with user consent).
 
 ---
 
-### Issue #27: Create Homebrew Formula
+### Issue #29: Create Homebrew Formula
 **Labels**: `type: enhancement`, `priority: medium`
 
 **Description**:
@@ -790,7 +867,7 @@ brew install bams3
 
 ---
 
-### Issue #28: Create Bioconda Package
+### Issue #30: Create Bioconda Package
 **Labels**: `type: enhancement`, `priority: high`
 
 **Description**:
@@ -798,7 +875,7 @@ Submit to Bioconda for bioinformatics community distribution.
 
 ---
 
-### Issue #29: Write Announcement Blog Post
+### Issue #31: Write Announcement Blog Post
 **Labels**: `type: documentation`, `priority: high`
 
 **Description**:
@@ -822,7 +899,7 @@ Write comprehensive blog post announcing BAMS3 v1.0.0.
 
 ---
 
-### Issue #30: Submit to bioRxiv (Future)
+### Issue #32: Submit to bioRxiv (Future)
 **Labels**: `type: documentation`, `priority: low`
 
 **Description**:
