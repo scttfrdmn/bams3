@@ -18,6 +18,27 @@ Research data increasingly lives in S3 (genomics sequencing data, imaging data, 
 - Data duplication and version confusion
 - Users often don't know there are alternatives
 
+### The Origin Story: Why This Project Exists
+
+**The specific problem that sparked BAMS3:**
+
+We were pulling genomics data from AWS Open Data (us-east-1) → copying to our own S3 (us-west-2) → then copying again to local compute. **Two completely unnecessary copies, costing $4+ per 100GB file.**
+
+**The realization:** Instead of copying data around, just launch a $1.53/hour EC2 instance in the same region as the data and stream what you need.
+
+**The math:**
+- Cross-region copy: $2.00 + 30 minutes
+- Download to local: $9.00 + 30 minutes
+- **Total waste:** $11.00 and 60 minutes before analysis even starts
+
+**BAMS3 approach:**
+- Launch c5.9xlarge in source region: $1.53/hour
+- Stream only what you need: $0.0045 per gene
+- Start analysis immediately: 0 wait time
+- **Actual cost:** ~$0.26 for most queries (10 min × $1.53/hour)
+
+**The insight:** The EC2 instance costs less than the transfer you avoided, and you get your answer 10× faster. See [docs/COST_OPTIMIZATION.md](docs/COST_OPTIMIZATION.md) for detailed cost analysis.
+
 ## Use Case: Genomics Pipeline Example
 
 ```bash
